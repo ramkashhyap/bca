@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      # Checks out the code from the repository to the runner.
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+      # Sets up Python 3.12 environment for the workflow.
+
+    - name: Install Poetry
+      run: curl -sSL https://install.python-poetry.org | python3 -
+      # Installs Poetry for dependency management.
+
+    - name: Add Poetry to PATH
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+      # Adds Poetry to the PATH so it can be used in subsequent steps.
+
+    - name: Install dependencies
+      run: poetry install --no-root -v
+      # Installs the project dependencies defined in pyproject.toml using Poetry.
+
+    - name: Run unit tests
+      run: |
+        chmod +x ./run-unit-tests.sh
+        ./run-unit-tests.sh
+      # Makes the unit test script executable and then runs it to execute the unit tests.
+
+    - name: Set up Docker Buildx
+      run: |
+        docker buildx create --use
+      # Creates a Docker Buildx builder instance and sets it as the default for building multi-platform images.
+
+    - name: Build Docker image for linux/amd64
+      run: |
+        docker buildx build --platform linux/amd64 -t ghcr.io/${{ github.repository_owner }}/myapp:latest --push .
+      # Builds the Docker image for the linux/amd64 architecture and pushes it to GitHub Container Registry.
+
+    - name: Build Docker image for linux/arm64
+      run: |
+        docker buildx build --platform linux/arm64 -t ghcr.io/${{ github.repository_owner }}/myapp:latest --push .
+      # Builds the Docker image for the linux/arm64 architecture and pushes it to GitHub Container Registry.
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      # Logs into GitHub Container Registry to allow pushing images. Uses GitHub Actions' token for authentication.
+
+    - name: Cleanup
+      run: docker system prune -f
+      # Cleans up unused Docker data to free up disk space.
